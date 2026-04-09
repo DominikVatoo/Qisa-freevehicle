@@ -17,7 +17,7 @@ do
     end
 end
 
-local function flushDatabase()
+local function saveDatabase()
     local ok, encoded = pcall(json.encode, database)
     if not ok then return end
     SaveResourceFile(resName, 'database.json', encoded, -1)
@@ -26,27 +26,27 @@ end
 
 CreateThread(function()
     while true do
-        Wait(QISA.SaveInterval)
+        Wait(Config.SaveInterval)
         if dirty then
-            flushDatabase()
+            saveDatabase()
         end
     end
 end)
 
 AddEventHandler('onResourceStop', function(resource)
     if resource ~= resName then return end
-    if dirty then flushDatabase() end
+    if dirty then saveDatabase() end
 end)
 
 AddEventHandler('playerDropped', function()
     cooldowns[source] = nil
 end)
 
-RegisterCommand(QISA.CommandName, function(source)
+RegisterCommand(Config.CommandName, function(source)
     if source <= 0 then return end
 
     local now = GetGameTimer()
-    if cooldowns[source] and (now - cooldowns[source]) < QISA.CommandCooldown then return end
+    if cooldowns[source] and (now - cooldowns[source]) < Config.CommandCooldown then return end
     cooldowns[source] = now
 
     local xPlayer = ESX.GetPlayerFromId(source)
@@ -54,15 +54,15 @@ RegisterCommand(QISA.CommandName, function(source)
 
     local id = xPlayer.identifier
     if database[id] then
-        QISA.Notify(source, 'error', QISA.Notifications.AlreadyClaimed)
+        xPlayer.showNotification(Config.Notifications.AlreadyClaimed)
         return
     end
 
-    ExecuteCommand(('_givecar %d %s'):format(source, QISA.FreeCar))
+    ExecuteCommand(('_givecar %d %s'):format(source, Config.FreeCar))
 
     database[id] = os.time()
     dirty = true
 
-    QISA.Notify(source, 'success', QISA.Notifications.Success)
+    xPlayer.showNotification(Config.Notifications.Success)
     print(('[%s] %s (%s) hat Gratis-Fahrzeug erhalten'):format(resName, xPlayer.getName(), id))
 end, false)

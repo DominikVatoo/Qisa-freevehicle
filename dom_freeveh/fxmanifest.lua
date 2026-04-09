@@ -3,8 +3,7 @@ game 'gta5'
 lua54 'yes'
 
 version '1.0.0'
-description 'Gratis Fahrzeug fuer neue Spieler'
-author 'Dominik'
+author 'DominikVatoo'
 
 shared_scripts {
     'config.lua',

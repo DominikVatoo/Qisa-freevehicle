@@ -1,37 +1,68 @@
-ESX = exports['es_extended']:getSharedObject()
+local ESX = exports['es_extended']:getSharedObject()
 
-local freeCar = 'i30npriordesign'
-local isSaving = false
+local resName = GetCurrentResourceName()
 local database = {}
+local dirty = false
+local cooldowns = {}
 
-Citizen.CreateThread(function()
-    local raw = LoadResourceFile(GetCurrentResourceName(), 'database.json')
-    if raw then
-        database = json.decode(raw) or {}
+do
+    local raw = LoadResourceFile(resName, 'database.json')
+    if raw and raw ~= '' then
+        local ok, decoded = pcall(json.decode, raw)
+        if ok and type(decoded) == 'table' then
+            database = decoded
+        else
+            print(('[%s] ^1database.json korrupt, starte leer^0'):format(resName))
+        end
+    end
+end
+
+local function flushDatabase()
+    local ok, encoded = pcall(json.encode, database)
+    if not ok then return end
+    SaveResourceFile(resName, 'database.json', encoded, -1)
+    dirty = false
+end
+
+CreateThread(function()
+    while true do
+        Wait(QISA.SaveInterval)
+        if dirty then
+            flushDatabase()
+        end
     end
 end)
 
-local function saveDatabase()
-    while isSaving do
-        Citizen.Wait(50)
-    end
-    isSaving = true
-    SaveResourceFile(GetCurrentResourceName(), 'database.json', json.encode(database), -1)
-    isSaving = false
-end
+AddEventHandler('onResourceStop', function(resource)
+    if resource ~= resName then return end
+    if dirty then flushDatabase() end
+end)
 
-RegisterCommand('freecar', function(source)
+AddEventHandler('playerDropped', function()
+    cooldowns[source] = nil
+end)
+
+RegisterCommand(QISA.CommandName, function(source)
+    if source <= 0 then return end
+
+    local now = GetGameTimer()
+    if cooldowns[source] and (now - cooldowns[source]) < QISA.CommandCooldown then return end
+    cooldowns[source] = now
+
     local xPlayer = ESX.GetPlayerFromId(source)
     if not xPlayer then return end
 
-    if database[xPlayer.identifier] then
-        xPlayer.showNotification('Du hast bereits ein gratis Auto erhalten!')
+    local id = xPlayer.identifier
+    if database[id] then
+        QISA.Notify(source, 'error', QISA.Notifications.AlreadyClaimed)
         return
     end
 
-    database[xPlayer.identifier] = true
-    saveDatabase()
+    ExecuteCommand(('_givecar %d %s'):format(source, QISA.FreeCar))
 
-    ExecuteCommand('_givecar ' .. xPlayer.source .. ' ' .. freeCar)
-    xPlayer.showNotification('Dominik hat gegönnt! Viel Spaß mit deinem Auto!')
+    database[id] = os.time()
+    dirty = true
+
+    QISA.Notify(source, 'success', QISA.Notifications.Success)
+    print(('[%s] %s (%s) hat Gratis-Fahrzeug erhalten'):format(resName, xPlayer.getName(), id))
 end, false)
